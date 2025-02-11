@@ -396,14 +396,16 @@ class UnifiedManager:
         return self.repo_cnr_map.get(git_utils.normalize_url(url))
 
     def resolve_unspecified_version(self, node_name, guess_mode=None):
+        normalized_name = cnr_utils.normalize(node_name)
+
         if guess_mode == 'active':
             # priority:
             # 1. CNR/nightly active nodes
             # 2. unknown
             # 3. Fail
 
-            if node_name in self.cnr_map:
-                version_spec = self.get_from_cnr_active_nodes(node_name)
+            if normalized_name in self.cnr_map:
+                version_spec = self.get_from_cnr_active_nodes(normalized_name)
 
                 if version_spec is None:
                     if node_name in self.unknown_active_nodes:
@@ -423,13 +425,13 @@ class UnifiedManager:
             # 3. unknown
             # 4. Fail
 
-            if node_name in self.cnr_map:
-                latest = self.get_from_cnr_inactive_nodes(node_name)
+            if normalized_name in self.cnr_map:
+                latest = self.get_from_cnr_inactive_nodes(normalized_name)
 
                 if latest is not None:
                     version_spec = str(latest[0])
                 else:
-                    if node_name in self.nightly_inactive_nodes:
+                    if normalized_name in self.nightly_inactive_nodes:
                         version_spec = "nightly"
                     else:
                         version_spec = "unknown"
@@ -444,8 +446,8 @@ class UnifiedManager:
             # 1. CNR latest in world
             # 2. unknown
 
-            if node_name in self.cnr_map:
-                version_spec = self.cnr_map[node_name]['latest_version']['version']
+            if normalized_name in self.cnr_map:
+                version_spec = self.cnr_map[normalized_name]['latest_version']['version']
             else:
                 version_spec = "unknown"
 
@@ -475,11 +477,12 @@ class UnifiedManager:
             version_spec = spec[1]
 
             if version_spec == 'latest':
-                if node_name not in self.cnr_map:
+                normalized_name = cnr_utils.normalize(node_name)
+                if normalized_name not in self.cnr_map:
                     print(f"ERROR: '{node_name}' is not a CNR node.")
                     return None
                 else:
-                    version_spec = self.cnr_map[node_name]['latest_version']['version']
+                    version_spec = self.cnr_map[normalized_name]['latest_version']['version']
 
         elif guess_mode in ['active', 'inactive']:
             node_name = spec[0]
@@ -541,8 +544,10 @@ class UnifiedManager:
             self.add_to_cnr_inactive_nodes(node_package.id, node_package.version, node_package.fullpath)
 
     def is_updatable(self, node_id):
-        cur_ver = self.get_cnr_active_version(node_id)
-        latest_ver = self.cnr_map[node_id]['latest_version']['version']
+        normalized_id = cnr_utils.normalize(node_id)
+
+        cur_ver = self.get_cnr_active_version(normalized_id)
+        latest_ver = self.cnr_map[normalized_id]['latest_version']['version']
 
         if cur_ver and latest_ver:
             return self.safe_version(latest_ver) > self.safe_version(cur_ver)
@@ -601,7 +606,7 @@ class UnifiedManager:
             return True
         elif version_spec is not None and self.get_cnr_active_version(node_id) == version_spec:
             return True
-        elif version_spec is None and (node_id in self.active_nodes or node_id in self.unknown_active_nodes):
+        elif version_spec is None and (cnr_utils.normalize(node_id) in self.active_nodes or node_id in self.unknown_active_nodes):
             return True
         return False
 
@@ -614,36 +619,39 @@ class UnifiedManager:
 
         remark: latest version_spec is not allowed. Must be resolved before call.
         """
+
+        normalized_id = cnr_utils.normalize(node_id)
+
         if version_spec == "unknown":
             return node_id in self.unknown_inactive_nodes
         elif version_spec == "nightly":
-            return node_id in self.nightly_inactive_nodes
+            return normalized_id in self.nightly_inactive_nodes
         elif version_spec == "cnr":
-            res = self.cnr_inactive_nodes.get(node_id, None)
+            res = self.cnr_inactive_nodes.get(normalized_id, None)
             if res is None:
                 return False
 
             res = [x for x in res.keys() if x != 'nightly']
             return len(res) > 0
         elif version_spec is not None:
-            return version_spec in self.cnr_inactive_nodes.get(node_id, [])
+            return version_spec in self.cnr_inactive_nodes.get(normalized_id, [])
 
-        if node_id in self.nightly_inactive_nodes:
+        if normalized_id in self.nightly_inactive_nodes:
             return True
         elif node_id in self.unknown_inactive_nodes:
             return True
 
-        target = self.cnr_inactive_nodes.get(node_id, None)
+        target = self.cnr_inactive_nodes.get(normalized_id, None)
         if target is not None and target == version_spec:
             return True
 
         return False
 
     def is_registered_in_cnr(self, node_id):
-        return node_id in self.cnr_map
+        return cnr_utils.normalize(node_id)in self.cnr_map
 
     def get_cnr_active_version(self, node_id):
-        res = self.active_nodes.get(node_id)
+        res = self.active_nodes.get(cnr_utils.normalize(node_id))
         if res:
             return res[0]
         else:
@@ -653,22 +661,28 @@ class UnifiedManager:
         return node_id in self.unknown_active_nodes
 
     def add_to_cnr_inactive_nodes(self, node_id, ver, fullpath):
-        ver_map = self.cnr_inactive_nodes.get(node_id)
+        normalized_id = cnr_utils.normalize(node_id)
+
+        ver_map = self.cnr_inactive_nodes.get(normalized_id)
         if ver_map is None:
             ver_map = {}
-            self.cnr_inactive_nodes[node_id] = ver_map
+            self.cnr_inactive_nodes[normalized_id] = ver_map
 
         ver_map[ver] = fullpath
 
     def get_from_cnr_active_nodes(self, node_id):
-        ver_path = self.active_nodes.get(node_id)
+        normalized_id = cnr_utils.normalize(node_id)
+
+        ver_path = self.active_nodes.get(normalized_id)
         if ver_path is None:
             return None
 
         return ver_path[0]
 
     def get_from_cnr_inactive_nodes(self, node_id, ver=None):
-        ver_map = self.cnr_inactive_nodes.get(node_id)
+        normalized_id = cnr_utils.normalize(node_id)
+
+        ver_map = self.cnr_inactive_nodes.get(normalized_id)
         if ver_map is None:
             return None
 
@@ -773,6 +787,7 @@ class UnifiedManager:
                     else:
                         v['cnr_latest'] = cnr['latest_version']['version']
                     v['id'] = cnr['id']
+                    v['path_name'] = cnr['path_name'] if 'path_name' in cnr else cnr['id']
                     v['author'] = cnr['publisher']['name']
                     v['title'] = cnr['name']
                     v['description'] = cnr['description']
@@ -857,6 +872,7 @@ class UnifiedManager:
         if version_spec == 'unknown':
             info = self.unknown_active_nodes.get(node_id)
         else:
+            node_id = cnr_utils.normalize(node_id)
             info = self.active_nodes.get(node_id)
 
         if info is None or not os.path.exists(info[1]):
@@ -877,6 +893,8 @@ class UnifiedManager:
         switch between cnr version (lazy mode)
         """
 
+        node_id = cnr_utils.normalize(node_id)
+
         result = ManagedResult('switch-cnr')
 
         node_info = cnr_utils.install_node(node_id, version_spec)
@@ -891,7 +909,7 @@ class UnifiedManager:
         zip_url = node_info.download_url
         from_path = self.active_nodes[node_id][1]
         target = node_id
-        to_path = os.path.join(get_default_custom_nodes_path(), target)
+        to_path = os.path.join(get_default_custom_nodes_path(), self.cnr_map[node_id]['path_name'])
 
         def postinstall():
             return self.reserve_cnr_switch(target, zip_url, from_path, to_path, no_deps)
@@ -908,6 +926,8 @@ class UnifiedManager:
         """
         switch between cnr version
         """
+
+        node_id = cnr_utils.normalize(node_id)
 
         # 1. download
         result = ManagedResult('switch-cnr')
@@ -1002,6 +1022,8 @@ class UnifiedManager:
         from_path = None
         to_path = None
 
+        normalized_id = cnr_utils.normalize(node_id)
+
         if version_spec == 'unknown':
             repo_and_path = self.unknown_inactive_nodes.get(node_id)
             if repo_and_path is None:
@@ -1011,15 +1033,16 @@ class UnifiedManager:
             base_path = extract_base_custom_nodes_dir(from_path)
             to_path = os.path.join(base_path, node_id)
         elif version_spec == 'nightly':
-            self.unified_disable(node_id, False)
-            from_path = self.nightly_inactive_nodes.get(node_id)
+            self.unified_disable(normalized_id, is_unknown=False)
+            from_path = self.nightly_inactive_nodes.get(normalized_id)
             if from_path is None:
-                return result.fail(f'Specified inactive node not exists: {node_id}@nightly')
+                return result.fail(f'Specified inactive node not exists: {normalized_id}@nightly')
             base_path = extract_base_custom_nodes_dir(from_path)
-            to_path = os.path.join(base_path, node_id)
+            path_name = self.cnr_map[normalized_id]['path_name']
+            to_path = os.path.join(base_path, path_name)
         elif version_spec is not None:
-            self.unified_disable(node_id, False)
-            cnr_info = self.cnr_inactive_nodes.get(node_id)
+            self.unified_disable(normalized_id, is_unknown=False)
+            cnr_info = self.cnr_inactive_nodes.get(normalized_id)
 
             if cnr_info is None or len(cnr_info) == 0:
                 return result.fail(f'Specified inactive cnr node not exists: {node_id}')
@@ -1032,7 +1055,8 @@ class UnifiedManager:
 
             from_path = cnr_info[version_spec]
             base_path = extract_base_custom_nodes_dir(from_path)
-            to_path = os.path.join(base_path, node_id)
+            path_name = self.cnr_map[normalized_id]['path_name']
+            to_path = os.path.join(base_path, path_name)
 
         if from_path is None or not os.path.exists(from_path):
             return result.fail(f'Specified inactive node path not exists: {from_path}')
@@ -1054,6 +1078,8 @@ class UnifiedManager:
         return result.with_target(to_path)
 
     def unified_disable(self, node_id, is_unknown):
+        normalized_id = cnr_utils.normalize(node_id)
+
         result = ManagedResult('disable')
 
         if is_unknown:
@@ -1097,11 +1123,11 @@ class UnifiedManager:
         result.append((ver_and_path[1], to_path))
 
         if ver_and_path[0] == 'nightly':
-            self.nightly_inactive_nodes[node_id] = to_path
+            self.nightly_inactive_nodes[normalized_id] = to_path
         else:
-            self.add_to_cnr_inactive_nodes(node_id, ver_and_path[0], to_path)
+            self.add_to_cnr_inactive_nodes(normalized_id, ver_and_path[0], to_path)
 
-        del self.active_nodes[node_id]
+        del self.active_nodes[normalized_id]
 
         return result
 
@@ -1109,6 +1135,8 @@ class UnifiedManager:
         """
         Remove whole installed custom nodes including inactive nodes
         """
+        normalized_id = cnr_utils.normalize(node_id)
+
         result = ManagedResult('uninstall')
 
         if is_unknown:
@@ -1140,27 +1168,27 @@ class UnifiedManager:
                 return ManagedResult('skip')
 
         # remove from actives
-        ver_and_path = self.active_nodes.get(node_id)
+        ver_and_path = self.active_nodes.get(normalized_id)
 
         if ver_and_path is not None and os.path.exists(ver_and_path[1]):
             shutil.rmtree(ver_and_path[1])
             result.items.append(ver_and_path)
-            del self.active_nodes[node_id]
+            del self.active_nodes[normalized_id]
 
         # remove from nightly inactives
-        fullpath = self.nightly_inactive_nodes.get(node_id)
+        fullpath = self.nightly_inactive_nodes.get(normalized_id)
         if fullpath is not None and os.path.exists(fullpath):
             shutil.rmtree(fullpath)
             result.items.append(('nightly', fullpath))
-            del self.nightly_inactive_nodes[node_id]
+            del self.nightly_inactive_nodes[normalized_id]
 
         # remove from cnr inactives
-        ver_map = self.cnr_inactive_nodes.get(node_id)
+        ver_map = self.cnr_inactive_nodes.get(normalized_id)
         if ver_map is not None:
             for key, fullpath in ver_map.items():
                 shutil.rmtree(fullpath)
                 result.items.append((key, fullpath))
-            del self.cnr_inactive_nodes[node_id]
+            del self.cnr_inactive_nodes[normalized_id]
 
         if len(result.items) == 0:
             return ManagedResult('skip').with_msg('Not installed')
@@ -1168,6 +1196,8 @@ class UnifiedManager:
         return result
 
     def cnr_install(self, node_id, version_spec=None, instant_execution=False, no_deps=False, return_postinstall=False):
+        node_id = cnr_utils.normalize(node_id)
+
         result = ManagedResult('install-cnr')
 
         node_info = cnr_utils.install_node(node_id, version_spec)
@@ -1182,7 +1212,8 @@ class UnifiedManager:
             os.remove(download_path)
 
         # install_path
-        install_path = os.path.join(get_default_custom_nodes_path(), node_id)
+        path_name = self.cnr_map[node_id]['path_name']
+        install_path = os.path.join(get_default_custom_nodes_path(), path_name)
         if os.path.exists(install_path):
             return result.fail(f'Install path already exists: {install_path}')
 
@@ -1321,6 +1352,8 @@ class UnifiedManager:
             return ManagedResult('skip').with_msg('Up to date')
 
     def unified_update(self, node_id, version_spec=None, instant_execution=False, no_deps=False, return_postinstall=False):
+        normalized_id = cnr_utils.normalize(node_id)
+        
         orig_print(f"\x1b[2K\rUpdating: {node_id}", end='')
 
         if version_spec is None:
@@ -1330,11 +1363,11 @@ class UnifiedManager:
             return ManagedResult('update').fail(f'Update not available: {node_id}@{version_spec}')
 
         if version_spec == 'nightly':
-            return self.repo_update(self.active_nodes[node_id][1], instant_execution=instant_execution, no_deps=no_deps, return_postinstall=return_postinstall).with_target('nightly')
+            return self.repo_update(self.active_nodes[normalized_id][1], instant_execution=instant_execution, no_deps=no_deps, return_postinstall=return_postinstall).with_target('nightly')
         elif version_spec == 'unknown':
             return self.repo_update(self.unknown_active_nodes[node_id][1], instant_execution=instant_execution, no_deps=no_deps, return_postinstall=return_postinstall).with_target('unknown')
         else:
-            return self.cnr_switch_version(node_id, instant_execution=instant_execution, no_deps=no_deps, return_postinstall=return_postinstall)
+            return self.cnr_switch_version(normalized_id, instant_execution=instant_execution, no_deps=no_deps, return_postinstall=return_postinstall)
 
     async def install_by_id(self, node_id, version_spec=None, channel=None, mode=None, instant_execution=False, no_deps=False, return_postinstall=False):
         """
@@ -1344,6 +1377,8 @@ class UnifiedManager:
 
         remark: latest version_spec is not allowed. Must be resolved before call.
         """
+
+        normalized_id = cnr_utils.normalize(node_id)
 
         repo_url = None
         if version_spec is None:
@@ -1356,7 +1391,12 @@ class UnifiedManager:
 
         if version_spec == 'unknown' or version_spec == 'nightly':
             custom_nodes = await self.get_custom_nodes(channel, mode)
-            the_node = custom_nodes.get(node_id)
+
+            if version_spec != 'unknown':
+                the_node = custom_nodes.get(node_id)
+            else:
+                the_node = custom_nodes.get(normalized_id)
+
             if the_node is not None:
                 if version_spec == 'unknown':
                     repo_url = the_node['files'][0]
@@ -1375,17 +1415,22 @@ class UnifiedManager:
         elif version_spec == 'unknown' or version_spec == 'nightly':
             if version_spec == 'nightly':
                 # disable cnr nodes
-                if self.is_enabled(node_id, 'cnr'):
-                    self.unified_disable(node_id, False)
+                if self.is_enabled(normalized_id, 'cnr'):
+                    self.unified_disable(normalized_id, False)
 
-            to_path = os.path.abspath(os.path.join(get_default_custom_nodes_path(), node_id))
+            if version_spec == 'unknown':
+                to_path = os.path.abspath(os.path.join(get_default_custom_nodes_path(), node_id))
+            else:
+                path_name = self.cnr_map[node_id]['path_name']
+                to_path = os.path.abspath(os.path.join(get_default_custom_nodes_path(), path_name))
+
             res = self.repo_install(repo_url, to_path, instant_execution=instant_execution, no_deps=no_deps, return_postinstall=return_postinstall)
             if res.result:
                 if version_spec == 'unknown':
                     self.unknown_active_nodes[node_id] = to_path
                 elif version_spec == 'nightly':
                     cnr_utils.generate_cnr_id(to_path, node_id)
-                    self.active_nodes[node_id] = 'nightly', to_path
+                    self.active_nodes[normalized_id] = 'nightly', to_path
             else:
                 return res
 
@@ -1409,7 +1454,7 @@ class UnifiedManager:
 
         res = self.cnr_install(node_id, version_spec, instant_execution=instant_execution, no_deps=no_deps, return_postinstall=return_postinstall)
         if res.result:
-            self.active_nodes[node_id] = version_spec, res.to_path
+            self.active_nodes[normalized_id] = version_spec, res.to_path
 
         return res
 

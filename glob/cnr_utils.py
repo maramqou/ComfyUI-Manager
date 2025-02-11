@@ -22,6 +22,11 @@ async def get_cnr_data(cache_mode=True, dont_wait=True):
         print("A timeout occurred during the fetch process from ComfyRegistry.")
         return await _get_cnr_data(cache_mode=True, dont_wait=True)  # timeout fallback
 
+
+def normalize(x):
+    return x.strip().lower()
+    
+
 async def _get_cnr_data(cache_mode=True, dont_wait=True):
     global is_cache_loading
 
@@ -38,7 +43,10 @@ async def _get_cnr_data(cache_mode=True, dont_wait=True):
             remained = page < sub_json_obj['totalPages']
 
             for x in sub_json_obj['nodes']:
-                full_nodes[x['id']] = x
+                normalized_id = normalize(x['id'])
+                x['path_name'] = x['id']
+                x['id'] = normalized_id
+                full_nodes[normalized_id] = x
 
             if page % 5 == 0:
                 print(f"FETCH ComfyRegistry Data: {page}/{sub_json_obj['totalPages']}")
