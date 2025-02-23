@@ -1530,6 +1530,35 @@ export class CustomNodesManager {
 	}
 
 	async getMissingNodes() {
+		try {
+			let node_versions = app.extensionManager.workflow.activeWorkflow.initialState.extra.node_versions;
+			if(node_versions == undefined) {
+				return await this.getMissingNodesLegacy();
+			}
+			else {
+				const hashMap = {};
+
+				for(let k in node_versions) {
+					if(k == 'comfy-core')
+						continue;
+
+					let item = this.custom_nodes[k];
+					if(item != undefined) {
+						if(item.state == 'disabled' || item.state == 'not-installed')
+							hashMap[item.hash] = true;
+					}
+				}
+
+				return hashMap;
+			}
+		}
+		catch {
+			customAlert('[Legacy Mode] The legacy method of the missing node feature is used because it is either a legacy workflow or a legacy frontend.');
+			return await this.getMissingNodesLegacy();
+		}
+	}
+
+	async getMissingNodesLegacy() {
 		const mode = manager_instance.datasrc_combo.value;
 		this.showStatus(`Loading missing nodes (${mode}) ...`);
 		const res = await fetchData(`/customnode/getmappings?mode=${mode}`);

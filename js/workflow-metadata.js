@@ -69,6 +69,7 @@ class WorkflowMetadataExtension {
 
         if (cnr_id === "comfy-core") return; // don't allow hijacking comfy-core name
         if (cnr_id) nodeProperties.cnr_id = cnr_id;
+        else nodeProperties.aux_id = nodePackageName;
         if (ver) nodeProperties.ver = ver;
       } else if (["nodes", "comfy_extras"].includes(moduleType)) {
         nodeProperties.cnr_id = "comfy-core";
