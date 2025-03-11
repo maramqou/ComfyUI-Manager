@@ -75,6 +75,18 @@ def normalize_to_github_id(url) -> str:
     return None
 
 
+def get_author_id(url) -> str:
+    if 'github' in url or (GITHUB_ENDPOINT is not None and GITHUB_ENDPOINT in url):
+        author = os.path.basename(os.path.dirname(url))
+
+        if author.startswith('git@github.com:'):
+            author = author.split(':')[1]
+            
+        return author
+
+    return None
+
+
 def get_url_for_clone(url):
     url = normalize_url(url)
 

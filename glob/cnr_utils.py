@@ -86,6 +86,22 @@ async def _get_cnr_data(cache_mode=True, dont_wait=True):
             if 'latest_version' not in v:
                 v['latest_version'] = dict(version='nightly')
 
+            repo_url = v.get('repository')
+            if v.get('publisher') is None and repo_url is not None:
+                author_id = git_utils.get_author_id(repo_url)
+                v['publisher'] = {
+                    "createdAt": datetime.utcnow().isoformat() + "Z",  # assign current time
+                    "description": "",
+                    "id": f"{author_id}@unclaimed",
+                    "logo": "",
+                    "members": [],
+                    "name": git_utils.get_author_id(repo_url),
+                    "source_code_repo": "",
+                    "status": "unclaimed",
+                    "support": "",
+                    "website": ""
+                }
+
         return {'nodes': list(full_nodes.values())}
 
     if cache_mode:
